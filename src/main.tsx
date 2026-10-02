@@ -60,7 +60,32 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
  useEffect(()=>{setQueue(prev=>{const ids=eligible.map(c=>c.id);const kept=prev.filter(id=>ids.includes(id));return kept.length?kept:shuffleIds(ids);})},[activeDeck,practiceMastered,cards]);
  const current=queue.length?eligible.find(c=>c.id===queue[0]):undefined;
  async function add(e:React.FormEvent){e.preventDefault();if(!front.trim()||!back.trim()||!deck.trim())return;const card={id:crypto.randomUUID(),deck:deck.trim(),front:front.trim(),back:back.trim(),streak:0,mastered:false,attempts:0};await persistCards([...cards,card],[card]);setFront('');setBack('');setMessage('Card added')}
- async function review(grade:'again'|'good') {if(!current||grading)return;setGrading(true);setFlipped(false);setRevealedId(null);const streak=grade==='again'?Math.max(0,current.streak-1):current.streak+1;const mastered=practiceMastered?current.mastered:streak>=4;const changed={...current,streak,mastered,attempts:current.attempts+1};await persistCards(cards.map(c=>c.id===current.id?changed:c),[changed]);setQueue(prev=>{const remaining=prev.filter(id=>id!==current.id);if(remaining.length)return remaining;const nextRound=eligible.filter(c=>c.id!==current.id||practiceMastered||!mastered).map(c=>c.id);return shuffleIds(nextRound);});setGrading(false);setMessage(mastered&&!practiceMastered?'Word mastered!':'Progress saved on this device')}
+ async function review(grade:'again'|'good') {
+  if(!current||grading)return;
+  setGrading(true);
+  const streak=grade==='again'?Math.max(0,current.streak-1):current.streak+1;
+  const mastered=practiceMastered?current.mastered:streak>=4;
+  const changed={...current,streak,mastered,attempts:current.attempts+1};
+  const nextCards=cards.map(c=>c.id===current.id?changed:c);
+  // Advance and reset the flip in the same render, without showing the old card's front.
+  setCards(nextCards);
+  setQueue(prev=>{
+   const remaining=prev.filter(id=>id!==current.id);
+   if(remaining.length)return remaining;
+   const nextRound=eligible.filter(c=>c.id!==current.id||practiceMastered||!mastered).map(c=>c.id);
+   return shuffleIds(nextRound);
+  });
+  setFlipped(false);
+  setRevealedId(null);
+  try{
+   await uploadCloud(user!.id,[changed],[]);
+   setMessage(mastered&&!practiceMastered?'Word mastered!':'Saved to cloud');
+  }catch(error){
+   setMessage('Cloud save failed; retry after reconnecting: '+(error instanceof Error?error.message:String(error)));
+  }finally{
+   setGrading(false);
+  }
+ }
  async function cloudTransfer(mode:'upload'|'download'){
   if(!user||cloudBusy)return;
   setCloudBusy(true);
