@@ -19,3 +19,10 @@ export async function uploadCloud(userId:string,cards:CloudCard[],decks:string[]
   if(result.error)throw result.error;
  }
 }
+
+export async function deleteCloudCard(userId:string,cardId:string){
+ if(!supabase)throw Error('Supabase is not configured');
+ const {data,error}=await supabase.from('flashy_cards').delete().eq('user_id',userId).eq('id',cardId).select('id');
+ if(error)throw error;
+ if(!data?.length)throw Error('Card was not deleted. Check database permissions or refresh.');
+}
