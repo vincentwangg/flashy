@@ -63,8 +63,8 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
  async function review(grade:'again'|'good') {
   if(!current||grading)return;
   setGrading(true);
-  const streak=grade==='again'?Math.max(0,current.streak-1):current.streak+1;
-  const mastered=practiceMastered?current.mastered:streak>=4;
+  const streak=grade==='again'?Math.max(0,Math.min(4,current.streak)-1):Math.min(4,current.streak+1);
+  const mastered=streak>=4;
   const changed={...current,streak,mastered,attempts:current.attempts+1};
   const nextCards=cards.map(c=>c.id===current.id?changed:c);
   // Advance and reset the flip in the same render, without showing the old card's front.
@@ -72,7 +72,7 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
   setQueue(prev=>{
    const remaining=prev.filter(id=>id!==current.id);
    if(remaining.length)return remaining;
-   const nextRound=eligible.filter(c=>c.id!==current.id||practiceMastered||!mastered).map(c=>c.id);
+   const nextRound=eligible.filter(c=>c.id!==current.id||(practiceMastered?mastered:!mastered)).map(c=>c.id);
    return shuffleIds(nextRound);
   });
   setFlipped(false);
