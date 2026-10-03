@@ -91,7 +91,7 @@ function App(){
    const next:LocalSnapshot<Card>={cards:refreshed.cards,decks:[...new Set([...refreshed.decks,...local.decks])],counters:refreshed.deckCounters,dirty:{},deleted:{},counterDirty:{}};
    // Never overwrite answers made during the network request.
    const newest=await readLocal<Card>(user.id);
-   if(newest&&JSON.stringify(newest)!==JSON.stringify(local))return;
+   if(newest&&JSON.stringify(newest)!==JSON.stringify(local)){setMessage('Newer offline changes pending; sync again');return;}
    commit(next);setMessage('Synced to cloud');
   }catch(e){setMessage('Offline changes kept; sync failed: '+String(e))}finally{setSyncing(false)}
  }
@@ -117,8 +117,7 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
  // Once a fully-mastered deck starts continuous review, a missed card must not stop it.
  const inContinuous=continuous||allMastered;
  const eligible=deckCards.filter(c=>(introducedIds.has(c.id)||mastered(c))&&(retryDue[c.id]==null||retryDue[c.id]<=deckCount)&& (!mastered(c)||
-   nextReview(c)==null||nextReview(c)!<=deckCount||
-   nextReview(c)!-deckCount>10000));
+   nextReview(c)==null||nextReview(c)!<=deckCount));
  useEffect(()=>{setContinuous(false);setRetryDue({});setQueue([])},[activeDeck,reviewDirection]);
  useEffect(()=>{setQueue(prev=>{
   const ids=new Set(eligible.map(c=>c.id));
@@ -210,7 +209,7 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
   const original=cards.find(c=>c.id===editingId);if(!original)return;
   const changed={...original,front:editFront.trim(),back:editBack.trim(),deck:editDeck};
   setManageBusy(true);
-  try{changeCards(cards.map(c=>c.id===changed.id?changed:c),[changed]);setEditingId(null);setMessage('Card updated in cloud')}
+  try{changeCards(cards.map(c=>c.id===changed.id?changed:c),[changed]);setEditingId(null);setMessage('Card saved offline')}
   catch(error){setMessage('Edit failed; no local changes applied: '+String(error))}
   finally{setManageBusy(false)}
  }
@@ -222,14 +221,14 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
    changeCards(cards.map(c=>c.id===card.id?changed:c),[changed]);
    setRetryDue(prev=>{const next={...prev};delete next[card.id];return next});
    setQueue([]);setContinuous(false);setFlipped(false);setRevealedId(null);
-   setMessage('Both mastery directions reset and saved to cloud');
+   setMessage('Both mastery directions reset offline');
   }catch(error){setMessage('Reset failed; mastery unchanged: '+String(error))}
   finally{setManageBusy(false)}
  }
  async function removeCard(card:Card){
   if(!user||manageBusy||!window.confirm('Permanently delete "'+card.front+'" from your cloud account?'))return;
   setManageBusy(true);
-  try{if(snapshot)commit({...snapshot,cards:cards.filter(c=>c.id!==card.id),deleted:{...snapshot.deleted,[card.id]:Date.now()}});setQueue(prev=>prev.filter(id=>id!==card.id));if(editingId===card.id)setEditingId(null);setFlipped(false);setMessage('Card deleted from cloud')}
+  try{if(snapshot)commit({...snapshot,cards:cards.filter(c=>c.id!==card.id),deleted:{...snapshot.deleted,[card.id]:Date.now()}});setQueue(prev=>prev.filter(id=>id!==card.id));if(editingId===card.id)setEditingId(null);setFlipped(false);setMessage('Card deleted locally; sync when online')}
   catch(error){setMessage('Delete failed; card kept: '+String(error))}
   finally{setManageBusy(false)}
  }
