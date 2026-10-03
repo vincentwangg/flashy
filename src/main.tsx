@@ -1,10 +1,10 @@
 import React, {useEffect, useState} from 'react';
 import type {User} from '@supabase/supabase-js';
 import {supabase} from './supabase';
-import {fetchCloud,uploadCloud,deleteCloudCard,submitReview} from './cloud';
+import {fetchCloud,uploadCloud,deleteCloudCard,saveReviewCount} from './cloud';
 import {createRoot} from 'react-dom/client';
 import './style.css';
-type Card={id:string;deck:string;front:string;back:string;streak:number;mastered:boolean;attempts:number;next_review_count?:number|null;definition_streak:number;definition_mastered:boolean;definition_next_review_count?:number|null};
+type Card={id:string;deck:string;front:string;back:string;streak:number;mastered:boolean;attempts:number;mastery_confidence:number;definition_mastery_confidence:number;next_review_count?:number|null;definition_streak:number;definition_mastered:boolean;definition_next_review_count?:number|null};
 const KEY='my-flashcards-mastery-v1';
 const DECKS_KEY='my-flashcards-decks-v1';
 function loadDecks():string[]{try{const value=JSON.parse(localStorage.getItem(DECKS_KEY)||'[]');return Array.isArray(value)?value.filter((d):d is string=>typeof d==='string'&&!!d.trim()):[]}catch{return []}}
@@ -88,17 +88,25 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
   return kept.length?kept:shuffleIds([...ids]);
  })},[activeDeck,cards,deckCount,continuous,retryDue]);
  const current=queue.length?eligible.find(c=>c.id===queue[0]):undefined;
- async function add(e:React.FormEvent){e.preventDefault();if(!front.trim()||!back.trim()||!deck.trim())return;const card={id:crypto.randomUUID(),deck:deck.trim(),front:front.trim(),back:back.trim(),streak:0,mastered:false,attempts:0,definition_streak:0,definition_mastered:false,definition_next_review_count:null};await persistCards([...cards,card],[card]);setFront('');setBack('');setMessage('Card added')}
+ async function add(e:React.FormEvent){e.preventDefault();if(!front.trim()||!back.trim()||!deck.trim())return;const card={id:crypto.randomUUID(),deck:deck.trim(),front:front.trim(),back:back.trim(),streak:0,mastered:false,attempts:0,mastery_confidence:0,definition_mastery_confidence:0,definition_streak:0,definition_mastered:false,definition_next_review_count:null};await persistCards([...cards,card],[card]);setFront('');setBack('');setMessage('Card added')}
  async function review(grade:'again'|'good') {
   if(!current||grading)return;
   setGrading(true);
-  const requestId=crypto.randomUUID();
   try{
-   const result=await submitReview(current.id,grade,requestId,reviewDirection);
-   const newCount=result.deck_review_count;
+   const newCount=(deckCounters[activeDeck]?.[reviewDirection]??0)+1;
+   const previousMastery=mastery(current);
+   const newStreak=grade==='again'?Math.max(0,previousMastery-1):Math.min(4,previousMastery+1);
+   const previousConfidence=reviewDirection==='term'?(current.mastery_confidence??0):(current.definition_mastery_confidence??0);
+   const newConfidence=grade==='again'?0:(previousMastery===4?Math.min(4,previousConfidence+1):previousConfidence);
+   const intervals=[[40,60],[125,175],[350,450],[750,950],[1500,2000]];
+   const [low,high]=intervals[newConfidence];
+   const nextDue=newStreak===4?newCount+low+Math.floor(Math.random()*(high-low+1)):null;
+   const result={card_streak:newStreak,card_mastered:newStreak===4};
    const changed={...current,attempts:current.attempts+1,...(reviewDirection==='term'?
-    {streak:result.card_streak,mastered:result.card_mastered,next_review_count:result.card_next_review_count}:
-    {definition_streak:result.card_streak,definition_mastered:result.card_mastered,definition_next_review_count:result.card_next_review_count})};
+    {streak:newStreak,mastered:newStreak===4,next_review_count:nextDue,mastery_confidence:newConfidence}:
+    {definition_streak:newStreak,definition_mastered:newStreak===4,definition_next_review_count:nextDue,definition_mastery_confidence:newConfidence})};
+   await uploadCloud(user!.id,[changed],[]);
+   await saveReviewCount(user!.id,activeDeck,reviewDirection,newCount);
    const nextCards=cards.map(c=>c.id===current.id?changed:c);
    const nowContinuous=inContinuous;
    setCards(nextCards);
@@ -127,7 +135,7 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
      if(nextWord)nextIntroduced.add(nextWord.id);
     }
     const pool=nextCards.filter(c=>c.deck===activeDeck&&(nextIntroduced.has(c.id)||mastered(c))&&c.id!==current.id&&
-      (nowContinuous||!mastered(c)||nextReview(c)==null||nextReview(c)!<=newCount));
+      (!mastered(c)||nextReview(c)==null||nextReview(c)!<=newCount));
     return shuffleIds(pool.map(c=>c.id));
    });
    setFlipped(false);setRevealedId(null);
@@ -168,7 +176,7 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
  }
  async function resetMastery(card:Card){
   if(!user||manageBusy||grading||!window.confirm('Reset both Term first and Definition first mastery for "'+card.front+'" to 0/4? This clears both scheduled reviews.'))return;
-  const changed={...card,streak:0,mastered:false,next_review_count:null,definition_streak:0,definition_mastered:false,definition_next_review_count:null};
+  const changed={...card,streak:0,mastered:false,next_review_count:null,mastery_confidence:0,definition_mastery_confidence:0,definition_streak:0,definition_mastered:false,definition_next_review_count:null};
   setManageBusy(true);
   try{
    await uploadCloud(user.id,[changed],[]);
