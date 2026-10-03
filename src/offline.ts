@@ -1,0 +1,6 @@
+// Persist a complete per-user snapshot and unsynced changes in IndexedDB.
+export type LocalSnapshot<T>={cards:T[];decks:string[];counters:Record<string,{term:number;definition:number}>;dirty:Record<string,number>;deleted:Record<string,number>;counterDirty:Record<string,boolean>};
+const DB='flashy-offline-v1';
+function openDB():Promise<IDBDatabase>{return new Promise((resolve,reject)=>{const req=indexedDB.open(DB,1);req.onupgradeneeded=()=>req.result.createObjectStore('snapshots');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)})}
+export async function readLocal<T>(userId:string):Promise<LocalSnapshot<T>|null>{const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readonly');const req=tx.objectStore('snapshots').get(userId);req.onsuccess=()=>resolve(req.result??null);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close()})}
+export async function writeLocal<T>(userId:string,snapshot:LocalSnapshot<T>):Promise<void>{const db=await openDB();return new Promise((resolve,reject)=>{const tx=db.transaction('snapshots','readwrite');tx.objectStore('snapshots').put(snapshot,userId);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>{db.close();reject(tx.error)}})}
