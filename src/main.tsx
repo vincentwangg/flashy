@@ -75,7 +75,7 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
  const allMastered=deckCards.length>0&&deckCards.every(mastered);
  // Once a fully-mastered deck starts continuous review, a missed card must not stop it.
  const inContinuous=continuous||allMastered;
- const eligible=deckCards.filter(c=>(introducedIds.has(c.id)||mastered(c))&&(retryDue[c.id]==null||retryDue[c.id]<=deckCount)&& (inContinuous||!mastered(c)||
+ const eligible=deckCards.filter(c=>(introducedIds.has(c.id)||mastered(c))&&(retryDue[c.id]==null||retryDue[c.id]<=deckCount)&& (!mastered(c)||
    nextReview(c)==null||nextReview(c)!<=deckCount||
    nextReview(c)!-deckCount>10000));
  useEffect(()=>{setContinuous(false);setRetryDue({});setQueue([])},[activeDeck,reviewDirection]);
@@ -127,7 +127,7 @@ function shuffleIds(ids:string[]){const result=[...ids];for(let i=result.length-
      if(nextWord)nextIntroduced.add(nextWord.id);
     }
     const pool=nextCards.filter(c=>c.deck===activeDeck&&(nextIntroduced.has(c.id)||mastered(c))&&c.id!==current.id&&
-      (nowContinuous||!mastered(c)||nextReview(c)==null||nextReview(c)!<=newCount));
+      (!mastered(c)||nextReview(c)==null||nextReview(c)!<=newCount));
     return shuffleIds(pool.map(c=>c.id));
    });
    setFlipped(false);setRevealedId(null);
